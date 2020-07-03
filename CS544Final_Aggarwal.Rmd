@@ -1,0 +1,909 @@
+---
+title: "Analysis of Cryptocurrency Data"
+author: 
+ - 'By'
+ - 'Adetya Aggarwal'
+date: "19/06/2020"
+output: 
+  html_document:
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+A Cryptocurrency is a digital asset, which is designed to be a medium of exchange and who's
+records are saved in a digital format using strong cryptographic algorithms. In lay
+man's terms, it is money which only exists only in the digital form.
+
+In this project, the stock prices of 12 major cryptocurrencies including the daily 
+volume traded and their respective market capitalization is analyzed using the base
+R programming language and its some of its popular libraries like t
+Tidyverse and Quantmod.
+All visualizations are constructed using GGplot and Plotly libraries
+
+### Mission Outline
+
+1. The Dataset
+2. Initial View
+3. Description, Slicing and New feature
+4. Prices, Market Capitalization and Volume.
+5. Distribution and Correlation of Volume
+6. Central Limit Theorem
+7. Sampling Methods
+
+
+### 1. The Dataset
+
+The Dataset consists of daily stock prices of 12 major cryptocurrencies from April 
+of 2013 to December 2019. The data has the following features - 
+
+1. Currency Name
+2. Date
+3. Open       (Opening Price)
+4. Close      (Closing Price)
+5. High       (Highest Price of the stock on a given day)
+6. Low        (Lowest Price of the stock on a given day)
+7. Volume     (Total Volume of Stock Traded by day)
+8. Market Cap (Total Market Value of the coin by day)
+
+### 2. Initial View
+
+```{r loadlib, echo=T, results='hide', message=F, warning=F} 
+library(quantmod)
+library(gridExtra)
+library(Hmisc)
+library(plotly)
+library(sampling)
+library(ggplotlyExtra)
+library(ggplot2)
+library(tidyverse)
+options(scipen=999)
+cd = read.csv("C:/Users/adety/Desktop/Courses/544/Project/consolidated_coin_data.csv")
+```
+
+```{r, include=TRUE}
+head(cd)
+tail(cd)
+summary(cd)
+```
+
+The Dataset is read into R and the initial view of the dataset shows that both - 
+numeric and non-numeric features, are saved in the character format.
+Therefore, at first all features need to be converted to their respective types 
+from the character format.
+
+### 3. Description, Slicing and New features
+
+
+The Currency feature is left as character, the Date variable is converted to 
+Date type, also, a new feature 'year' is added to the dataset. All other features 
+are then converted to numeric types. The summary function is used to check the 
+data again after conversion. 
+
+The Summary function reveals that the Data set has 28944 rows and other various
+summarizations for the numerical features.
+
+```{r, include=TRUE}
+cd$Date = as.Date(cd$Date, '%b %d, %Y')
+cd$Open = as.numeric(gsub(pattern = ',','',cd$Open))
+cd$High = as.numeric(gsub(pattern = ',','',cd$High))
+cd$Low = as.numeric(gsub(pattern = ',','',cd$Low))
+cd$Close = as.numeric(gsub(pattern = ',','',cd$Close))
+cd$Volume = as.numeric(gsub(pattern = ',','',cd$Volume))
+cd$Market.Cap = as.numeric(gsub(pattern = ',','',cd$Market.Cap))
+cd$year = as.numeric(format(cd$Date,"%Y"))
+cd$Currency = capitalize(cd$Currency)
+summary(cd)
+```
+
+
+The Plot below shows the names of the 12 currencies represented in the dataset. It also
+shows that each currency has equal representation of 2412 rows of information and 
+it also further verifies, that there is no missing data in the dataset.
+
+```{r, echo=TRUE,fig.width=10, fig.height=5, message=F, warning=F}
+plot_ly(as.data.frame(cd$Currency),labels = cd$Currency,type = 'pie',hole = 0.6) %>%
+  layout(xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+         yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE))
+```
+
+As mentioned earlier, this is huge data set with a large number of rows.
+To make it easier to navigate through the Data, the dataset is divided into 12 
+subsets of each currency. The Date column henceforth, is converted to index of the 
+Data making it easier to plot the values. Also, the currency name column for the 
+subsequent currencies is dropped with data frame name being the identifier of the 
+subsetted data.
+
+As The subsetted data is in the form 'OHLC' (open,High,Low,Close) it is in the ideal format 
+to work with the Quantmod library and hence is converted to XTS type. 
+
+
+```{r, echo=T, results='hide', message=F, warning=F} 
+
+Bitcoin_sv = subset(cd,cd$Currency == 'Bitcoin-sv')
+Bitcoin_sv$Currency = NULL
+colnames(Bitcoin_sv) = c('Bitcoin_svDate','Bitcoin_svOpen','Bitcoin_svHigh',
+                         'Bitcoin_svLow','Bitcoin_svClose','Bitcoin_svVolume',
+                         'Bitcoin_svMarket.Cap')
+Bitcoin_sv = xts(Bitcoin_sv[,-1], order.by=Bitcoin_sv[,1])
+
+Bitcoin_cash = subset(cd,cd$Currency == 'Bitcoin-cash')
+Bitcoin_cash$Currency = NULL
+colnames(Bitcoin_cash) = c('Bitcoin_cashDate','Bitcoin_cashOpen','Bitcoin_cashHigh',
+                         'Bitcoin_cashLow','Bitcoin_cashClose','Bitcoin_cashVolume',
+                         'Bitcoin_cashMarket.Cap')
+Bitcoin_cash = xts(Bitcoin_cash[,-1], order.by=Bitcoin_cash[,1])
+
+Bitcoin = subset(cd,cd$Currency == 'Bitcoin')
+Bitcoin$Currency = NULL
+colnames(Bitcoin) = c('BitcoinDate','BitcoinOpen','BitcoinHigh',
+                           'BitcoinLow','BitcoinClose','BitcoinVolume',
+                           'BitcoinMarket.Cap')
+Bitcoin = xts(Bitcoin[,-1], order.by=Bitcoin[,1])
+
+Cardano = subset(cd,cd$Currency == 'Cardano')
+Cardano$Currency = NULL
+colnames(Cardano) = c('CardanoDate','CardanoOpen','CardanoHigh',
+                      'CardanoLow','CardanoClose','CardanoVolume',
+                      'CardanoMarket.Cap')
+Cardano = xts(Cardano[,-1], order.by=Cardano[,1])
+
+Eos = subset(cd,cd$Currency == 'Eos')
+Eos$Currency = NULL
+colnames(Eos) = c('EosDate','EosOpen','EosHigh',
+                      'EosLow','EosClose','EosVolume',
+                      'EosMarket.Cap')
+Eos = xts(Eos[,-1], order.by=Eos[,1])
+
+Ethereum = subset(cd,cd$Currency == 'Ethereum')
+Ethereum$Currency = NULL
+colnames(Ethereum) = c('EthereumDate','EthereumOpen','EthereumHigh',
+                  'EthereumLow','EthereumClose','EthereumVolume',
+                  'EthereumMarket.Cap')
+Ethereum = xts(Ethereum[,-1], order.by=Ethereum[,1])
+
+Litecoin = subset(cd,cd$Currency == 'Litecoin')
+Litecoin$Currency = NULL
+colnames(Litecoin) = c('LitecoinDate','LitecoinOpen','LitecoinHigh',
+                       'LitecoinLow','LitecoinClose','LitecoinVolume',
+                       'LitecoinMarket.Cap')
+Litecoin = xts(Litecoin[,-1], order.by=Litecoin[,1])
+
+Stellar = subset(cd,cd$Currency == 'Stellar')
+Stellar$Currency = NULL
+colnames(Stellar) = c('StellarDate','StellarOpen','StellarHigh',
+                       'StellarLow','StellarClose','StellarVolume',
+                       'StellarMarket.Cap')
+Stellar = xts(Stellar[,-1], order.by=Stellar[,1])
+
+Tether = subset(cd,cd$Currency == 'Tether')
+Tether$Currency = NULL
+colnames(Tether) = c('TetherDate','TetherOpen','TetherHigh',
+                      'TetherLow','TetherClose','TetherVolume',
+                      'TetherMarket.Cap')
+Tether = xts(Tether[,-1], order.by=Tether[,1])
+
+Tezos = subset(cd,cd$Currency == 'Tezos')
+Tezos$Currency = NULL
+colnames(Tezos) = c('TezosDate','TezosOpen','TezosHigh',
+                     'TezosLow','TezosClose','TezosVolume',
+                     'TezosMarket.Cap')
+Tezos = xts(Tezos[,-1], order.by=Tezos[,1])
+
+Xrp = subset(cd,cd$Currency == 'Xrp')
+Xrp$Currency = NULL
+colnames(Xrp) = c('XrpDate','XrpOpen','XrpHigh',
+                    'XrpLow','XrpClose','XrpVolume',
+                    'XrpMarket.Cap')
+Xrp = xts(Xrp[,-1], order.by=Xrp[,1])
+
+Binance_coin = subset(cd,cd$Currency == 'Binance-coin')
+Binance_coin$Currency = NULL
+colnames(Binance_coin) = c('Binance_coinDate','Binance_coinOpen','Binance_coinHigh',
+                  'Binance_coinLow','Binance_coinClose','Binance_coinVolume',
+                  'Binance_coinMarket.Cap')
+Binance_coin = xts(Binance_coin[,-1], order.by=Binance_coin[,1])
+```
+### 4. Prices, Market Capitalization and Volume.
+
+
+The Opening prices of all currencies by date is presented in this plot. It can be 
+clearly seen that the prices of all currencies actually didn't start picking up until 
+the later half of 2017.there was some interest in Ethereum in the beginning, however,  
+that died down quickly after the  first two years of its inception. It is now 
+known that 2017 was the year when digital currency formally joined the financial 
+markets. 
+
+The reason of sudden interest in Bitcoin in the mid of 2017 is still unknown, however, it is 
+wildly speculated that a single 'whale'( entity or a person who owns a large 
+amount of stock of a single company) manipulated the price of Bitcoin causing it 
+to flare up and hence generating large scale interest in the currency. Upon which,
+the financial world sort of opened its eyes towards digital currencies and 
+almost all currencies saw a jump in their prices with Bitcoin emerging  as the 
+strongest and the most popular currency of the competition.
+
+```{r, echo=TRUE,message=F, warning=F,fig.width=10, fig.height=5}
+ggplot(Bitcoin, aes(x = index(Bitcoin),y = Bitcoin[,1]/100,color = 'Bitcoin')) + 
+  geom_line() + 
+  ggtitle("All Crypto Opening price series") + 
+  theme(legend.position = "top") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  labs(
+    x = "Date",
+    y = "Opening Prices",
+    color = "Currencies",
+    caption = "Adi") +
+  scale_x_date(date_labels = "%b %y", date_breaks = "6 months") + 
+    theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5)) +
+  theme(legend.key.width = unit(2,"cm")) +
+  geom_line(aes(y = Xrp[,1],color = 'Xrp')) +
+  geom_line(aes(y = Cardano[,1],,color = 'Cardano')) + 
+  geom_line(aes(y = Tezos[,1],color = 'Tezos')) +
+  geom_line(aes(y = Binance_coin[,1],color = 'Binance_coin')) +
+  geom_line(aes(y = Eos[,1],color = 'Eos')) +
+  geom_line(aes(y = Tether[,1],color = 'Tether')) +
+  geom_line(aes(y = Bitcoin_cash[,1],color = 'Bitcoin_cash')) +
+  geom_line(aes(y = Stellar[,1],color = 'Stellar')) +
+  geom_line(aes(y = Litecoin[,1],color = 'Litecoin')) + 
+  geom_line(aes(y = Ethereum[,1],color = 'Ethereum')) +
+  geom_line(aes(y = Bitcoin_sv[,1],color = 'Bitcoin_sv'))
+```
+
+
+
+The four price indicators namely, Daily Opening, Closing, High and Low, by currency 
+are presented here in boxplots to better understand the price ranges of different 
+currencies. The plot shows the Data for the years 2017 to 2019.
+
+From the graph one can easily derive,  that apart from Bitcoin, no other currency was traded 
+for more than a $1000 consistently in the two years. Most currencies traded for below
+$500 and currencies like Tether and Cardano stayed under a dollar.
+
+
+
+```{r, echo=TRUE,message=F, warning=F,fig.width=10, fig.height=5}
+
+cd %>%
+  filter(year == '2018'| year == '2019' | year == '2019') %>%
+  plot_ly(type = 'box',x = ~High,transforms = list(list(type = 'filter',
+                                                        target = ~Currency,
+                                                        operation = '=',
+              value = unique(cd$Currency)[1])),name="High") %>%
+  add_boxplot(x = ~Low,name = 'Low') %>%
+  add_boxplot(x = ~Open,name = 'Open') %>%
+  add_boxplot(x = ~Close,name = 'Close') %>%
+  
+  layout(title = 'All Price Indicators of all Currencies',
+         xaxis = list(title = 'Value'), 
+         updatemenus = list(list(type = 'dropdown',buttons = list(
+    list(method = "restyle",args = list("transforms[0].value", unique(cd$Currency)[1]),
+         label = unique(cd$Currency)[1]),
+    list(method = "restyle",args = list("transforms[0].value", unique(cd$Currency)[2]),
+         label = unique(cd$Currency)[2]),
+    list(method = "restyle",args = list("transforms[0].value", unique(cd$Currency)[3]),
+         label = unique(cd$Currency)[3]),
+    list(method = "restyle",args = list("transforms[0].value", unique(cd$Currency)[4]),
+         label = unique(cd$Currency)[4]),
+    list(method = "restyle",args = list("transforms[0].value", unique(cd$Currency)[5]),
+         label = unique(cd$Currency)[5]),
+    list(method = "restyle",args = list("transforms[0].value", unique(cd$Currency)[6]),
+         label = unique(cd$Currency)[6]),
+    list(method = "restyle",args = list("transforms[0].value", unique(cd$Currency)[7]),
+         label = unique(cd$Currency)[7]),
+    list(method = "restyle",args = list("transforms[0].value", unique(cd$Currency)[8]),
+         label = unique(cd$Currency)[8]),
+    list(method = "restyle",args = list("transforms[0].value", unique(cd$Currency)[9]),
+         label = unique(cd$Currency)[9]),
+    list(method = "restyle",args = list("transforms[0].value", unique(cd$Currency)[10]),
+         label = unique(cd$Currency)[10]),
+    list(method = "restyle",args = list("transforms[0].value", unique(cd$Currency)[11]),
+         label = unique(cd$Currency)[11]),list(method = "restyle",
+                            args = list("transforms[0].value", unique(cd$Currency)[12]),
+         label = unique(cd$Currency)[12]))))) %>%
+  layout(annotations = list(list(text = "For the years 2017-19",  xref = "paper", yref = "paper",
+                            yanchor = "bottom",xanchor = "center", align = "center",
+                            x = 0.5, y = .97, showarrow = FALSE)))
+```
+
+
+As seen with the prices, the same can be said about the Market capitalization of 
+all the currencies. After the mid of 2017, when the prices started going up, so did
+the market value of all the currencies, and with Bitcoin again leading the competition
+by a huge margin.
+
+```{r, echo=TRUE,message=F, warning=F,fig.width=10, fig.height=5}
+ggplot(Bitcoin, aes(x = index(Bitcoin),y = Bitcoin[,6]/100000000,color = 'Bitcoin')) + 
+  geom_line() + 
+  ggtitle("All Crypto Market Cap") + 
+  theme(legend.position = "top") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  labs(
+    x = "Date",
+    y = "Total Mean Capital",
+    color = "Curriencies",
+    title = "All Currencies Market Capatalization",
+    subtitle = "in 100 millions",
+    caption = "Adi") +
+  scale_x_date(date_labels = "%b %y", date_breaks = "6 months") +
+    theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5)) +
+  theme(legend.key.width = unit(2,"cm")) +
+  geom_line(aes(y = Xrp[,6]/100000000,color = 'Xrp')) +
+  geom_line(aes(y = Cardano[,6]/100000000,,color = 'Cardano')) + 
+  geom_line(aes(y = Tezos[,6]/100000000,color = 'Tezos')) +
+  geom_line(aes(y = Binance_coin[,6]/100000000,color = 'Binance_coin')) +
+  geom_line(aes(y = Eos[,6]/100000000,color = 'Eos')) +
+  geom_line(aes(y = Tether[,6]/100000000,color = 'Tether')) +
+  geom_line(aes(y = Bitcoin_cash[,6]/100000000,color = 'Bitcoin_cash')) +
+  geom_line(aes(y = Stellar[,6]/100000000,color = 'Stellar')) +
+  geom_line(aes(y = Litecoin[,6]/100000000,color = 'Litecoin')) + 
+  geom_line(aes(y = Ethereum[,6]/100000000,color = 'Ethereum')) +
+  geom_line(aes(y = Bitcoin_sv[,6]/100000000,color = 'Bitcoin_sv'))
+```
+
+The plot below shows the progress of Bitcoin's market capitalization over the years. 
+it is interesting to see that in the early years Bitcoin and Ethereum were almost 
+neck to neck when it came to market capitalization. However, as Bitcoin gained popularity over
+the years, its value increased many a folds.
+
+What led to the sudden interest and explosion in the value of digital currencies 10 years after their inception,
+including that Bitcoin past 2017, is as mentioned earlier still a bit of a mystery, 
+however some of the main reasons are -
+
+1. Digital Currencies are not extensively regulated: 
+
+Unlike decree currencies like the US Dollar or the Euro, digital currencies are 
+not regulated, which means that any central bank or any particular government of 
+any country doesn't control them as much as they do other financial instruments.
+
+It is important to remember here, that when 'Satoshi Nakamoto' - the creator of 
+Bitcoin - wrote those lines of code to bring Bitcoin into existence back in 2009, 
+the world was going through the banking crises of 2008.
+Digital currencies were born somewhat due the requirement of alternative to fiat currencies 
+which were prone to a lot of regulation and financial market's manupliative forces.
+
+2. They are very discrete: 
+
+Cryptocurrencies offer a lot more privacy than bank accounts or other
+money keeping instruments. The account numbers or 'addresses' of cryptocurrencies 
+are in alpha-numeric format type, which are used as pointers to digital wallets 
+and are not related to the personal information of the entity or individual 
+which owns the wallet. and thus, digital currencies provide a much greater sense of 
+security against fraud and financial watchdog regulations.
+
+3. Short and stable supply: 
+
+In the case of Bitcoin, it has a very limited supply of only twenty million Bitcoins,
+and is unlikely to change in the near future.distinctively from normal currencies, 
+Bitcoins cannot be manufactured in a money mint in unlimited quantities 
+in the wake of a global catastrophe or a financial crisis. This not only makes 
+the existing Bitcoins more valuable as the time passes but also provides 
+solidarity to their monetary values.
+
+```{r,echo = TRUE,message=F, warning=F,fig.width=10, fig.height=5}
+cd %>%
+  plot_ly(labels = ~Currency,values = ~Market.Cap, type = 'pie',
+          transforms = list(list(type = 'filter',target = ~year,operation = '=',
+                          value = unique(cd$year)[1])),name="2013") %>%
+  layout(title = "Currency Yearly Market Capatalization Representation",
+         xaxis = list(title = 'Value'), 
+updatemenus = list(list(type = 'dropdown',buttons = list(
+  list(method = "restyle",args = list("transforms[0].value", unique(cd$year)[1]),
+       label = unique(cd$year)[1]),
+  list(method = "restyle",args = list("transforms[0].value", unique(cd$year)[2]),
+       label = unique(cd$year)[2]),
+  list(method = "restyle",args = list("transforms[0].value", unique(cd$year)[3]),
+       label = unique(cd$year)[3]),
+  list(method = "restyle",args = list("transforms[0].value", unique(cd$year)[4]),
+       label = unique(cd$year)[4]),
+  list(method = "restyle",args = list("transforms[0].value", unique(cd$year)[5]),
+       label = unique(cd$year)[5]),
+  list(method = "restyle",args = list("transforms[0].value", unique(cd$year)[6]),
+       label = unique(cd$year)[6]),
+  list(method = "restyle",args = list("transforms[0].value", unique(cd$year)[7]),
+       label = unique(cd$year)[7])))))
+```
+
+
+As there was hardly any interest in digital money before 2017, the 2017 onward
+volume traded data is presented here. It is evident that higher amount of market 
+interest after the mid of 2017, resulted in large amounts of volume being traded
+in the financial markets across the world.
+
+However, it is also quite interesting to note that even though currency Tether, 
+which was nowhere near the price range(96 cents to $ 1.04 of Tether vs 4k to 18k of Bitcoin) or the market capitalization of the Bitcoin,it rivals and sometimes even goes past Bitcoin in the amount of volume traded. 
+
+
+```{r,echo = TRUE,message=F, warning=F,fig.width=10, fig.height=5}
+ggplot(Bitcoin['2017-08/'], aes(x = index(Bitcoin['2017-08/']),
+                                y = Bitcoin['2017-08/'][,5]/100000000,
+                                color = 'Bitcoin')) + 
+  geom_line() + 
+  ggtitle("All Crypto Volume Traded") + 
+  theme(legend.position = "top") + 
+  labs(
+    x = "Date",
+    y = "Total Mean Volume",
+    color = "Curriencies",
+    subtitle = "in 100 millions",
+    caption = "Adi") +
+  scale_x_date(date_labels = "%b %y", date_breaks = "6 months") +
+    theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5)) +
+  theme(legend.key.width = unit(2,"cm")) +
+  geom_line(aes(y = Xrp['2017-08/'][,5]/100000000,color = 'Xrp')) +
+  geom_line(aes(y = Cardano['2017-08/'][,5]/100000000,color = 'Cardano')) + 
+  geom_line(aes(y = Tezos['2017-08/'][,5]/100000000,color = 'Tezos')) +
+  geom_line(aes(y = Binance_coin['2017-08/'][,5]/100000000,color = 'Binance_coin')) +
+  geom_line(aes(y = Eos['2017-08/'][,5]/100000000,color = 'Eos')) +
+  geom_line(aes(y = Tether['2017-08/'][,5]/100000000,color = 'Tether')) +
+  geom_line(aes(y = Bitcoin_cash['2017-08/'][,5]/100000000,color = 'Bitcoin_cash')) +
+  geom_line(aes(y = Stellar['2017-08/'][,5]/100000000,color = 'Stellar')) +
+  geom_line(aes(y = Litecoin['2017-08/'][,5]/100000000,color = 'Litecoin')) + 
+  geom_line(aes(y = Ethereum['2017-08/'][,5]/100000000,color = 'Ethereum')) +
+  geom_line(aes(y = Bitcoin_sv['2017-08/'][,5]/100000000,color = 'Bitcoin_sv'))
+```
+
+
+As suspected, the graphical representation below proves, that the volume traded of 
+Tether currency in the financial markets was actually higher than that of Bitcoin in the 
+year 2019.
+
+The reasons for the same are later explored in the project and the correlation
+between market capitalization and volume traded of the two currencies is also 
+scrutinized.
+
+```{r, include = TRUE}
+Bitcoin$year = as.numeric(format(index(Bitcoin),"%Y"))
+Tether$year = as.numeric(format(index(Tether),"%Y"))
+
+Vol_yrly_BT = aggregate(BitcoinVolume ~ year, data=Bitcoin , FUN= mean)
+Vol_yrly_BT$TetherVolume = aggregate(TetherVolume ~ year, data=Tether , FUN= mean)[2]
+
+Vol_yrly_BT$TetherVolume = as.numeric(unlist(Vol_yrly_BT$TetherVolume))
+```
+
+```{r,echo = TRUE,message=F, warning=F,fig.width=10, fig.height=5}
+plot_ly(Vol_yrly_BT,x =~year ,y = ~BitcoinVolume, type = 'bar',name = 'Bitcoin Volume',
+        marker = list(color = 'rgb(49,130,189)')) %>%
+  add_trace(y = ~TetherVolume, name = 'Tether Volume',
+            marker = list(color = 'rgb(204,204,204)')) %>%
+  layout(title = 'Yearly Volume Traded by Bitcoin & Tether',
+         xaxis = list(title = 'Years',tickangle = -45),
+         yaxis = list(title = 'Total Volume Traded'),
+         margin = list(b=100),
+         barmode = 'group')
+```
+
+
+### 5. Distribution & Correlation of Volume
+
+In the below graphs we look at the distribution of volume variable of Tether and Bitcoin Currencies.
+As is evident from the graph, it is a right skewed distribution. Which means they 
+are both positively skewed. The means and Standard Deviations of the Data are also
+marked.
+
+As it can be seen quite clearly, that mean is a lot lower than the median in both
+cases. This can mean there are a lot of outliers on the left of the data.
+
+
+```{r, include = TRUE}
+Bitcoin1819 = subset(Bitcoin,year == '2018' | year == '2019')
+Tether1819  = subset(Tether,year == '2018' | year == '2019')
+```
+
+```{r,echo = TRUE,message=F, warning=F,fig.width=10, fig.height=5}
+ggplot(Bitcoin1819,aes(x = BitcoinVolume/100000000, fill = cut(BitcoinVolume,30))) +
+  geom_histogram(show.legend = FALSE,bins = 50,color = 'black') + 
+  scale_fill_discrete(h = c(240,10)) + 
+  theme_minimal() +
+  labs(x = 'Bitcoin Volume', y = 'Frequency',title = 'Bitcoin Volume for 2018-19',
+  subtitle = 'in Hundred Millions',caption = "Adi" ) +
+  theme(axis.text.x = element_text(angle=65, vjust=0.6)) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5)) +
+  annotate("text", x=303, y=92, label= paste("Mean =",round(mean(Bitcoin1819$BitcoinVolume/100000000),2))) +
+  annotate("text", x=303, y=97, label= paste("SD =",round(sd(Bitcoin1819$BitcoinVolume/100000000),2))) +
+  annotate("text", x=300, y=87, label= paste("Median =",round(median(Bitcoin1819$BitcoinVolume/100000000),2))) +
+  scale_x_continuous(breaks = seq(0, 500, 50)) +
+  scale_y_continuous(limits = c(0, 100))+
+  geom_vline(aes(xintercept = mean(Bitcoin1819$BitcoinVolume/100000000)), linetype = "dashed")
+```
+
+```{r,echo = TRUE,message=F, warning=F,fig.width=10, fig.height=5}
+ggplot(Tether1819,aes(TetherVolume/100000000, fill = cut(TetherVolume,30))) + 
+  geom_histogram(show.legend = FALSE,bins = 50,color = 'black',size = .001) + 
+  scale_fill_discrete(h = c(240,10)) + 
+  theme_minimal() +
+  labs(x = 'Tether Volume', y = 'Frequency',title = 'Tether Volume for 2018-19',
+  subtitle = 'in Hundred Millions' ) +
+  theme(axis.text.x = element_text(angle=65, vjust=0.6)) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5)) +
+  scale_x_continuous(breaks = seq(0, 500, 50)) +
+  annotate("text", x=452, y=95, label= paste("Mean =",round(mean(Tether1819$TetherVolume/100000000),2))) +
+  annotate("text", x=454, y=100, label= paste("SD =",round(sd(Tether1819$TetherVolume/100000000),2))) +
+  annotate("text", x=450, y=90, label= paste("Median =",round(median(Tether1819$TetherVolume/100000000),2))) +
+  scale_y_continuous(limits = c(0, 100)) +
+  geom_vline(aes(xintercept = mean(Tether1819$TetherVolume/100000000)), linetype = "dashed") 
+
+```
+
+In the plot below, we examine the correlation between market capitalization and Volume traded
+for Currencies Tether and Bitcoin. Both Currencies show a positive correlation 
+with Tether showing a higher correlation of 0.77 whereas Bitcoin shows comparatively lower, 
+but still very strong correlation of 0.52 between its Volume Traded and Market Capitalization. 
+
+This basically means that the Market Capitalization for currencies (Tether more 
+than Bitcoin) directly influences the volume traded. Which is not very surprising
+since it is the public sentiment of trust(among other things) which largely influence
+the market capitalization of a product/company. For example, stock of prices 
+Mordena and other pharmaceutical companies shot up really high when the news of 
+them finding a possible vaccine for Covid-19 came out. Even though there was no 
+proof or conclusive tests in the beginning.
+
+However, we are still looking for the answer to the question as to why the volume 
+traded of Tether is almost similar to Bitcoin even though it is so far behind on 
+all other factors.
+
+
+```{r,echo = TRUE,message=F, warning=F,fig.width=10, fig.height=5}
+ggplot(Tether1819, aes(x=scale(TetherMarket.Cap), y=scale(TetherVolume))) + 
+  geom_point() +
+  geom_smooth(method=lm, se=FALSE, fullrange=TRUE,color = 'red') + 
+  geom_rug()+
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5)) +
+  labs(x = 'Scaled Tether Market Capatalization ', y = 'Scaled Tether Volume',
+       title = 'Tether Volume and Market Capatalization for 2018-19',
+       subtitle = 'Scaled',caption = "Adi" ) +
+  theme(panel.background = element_rect(colour = "orange",size = 2,linetype = "solid")) +
+  annotate("text", x=-1.20, y=4,size = 5, label= paste("Correlation =",
+            round(cor(Tether1819$TetherVolume,Tether1819$TetherMarket.Cap),2)))
+
+
+ggplot(Bitcoin1819, aes(x=scale(BitcoinMarket.Cap), y=scale(BitcoinVolume))) + 
+  geom_point() +
+  geom_smooth(method=lm, se=FALSE, fullrange=TRUE,color = 'red') + 
+  geom_rug()+
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5)) +
+  labs(x = 'Scaled Bitcoin Market Capatalization ', y = 'Scaled Bitcoin Volume',
+       title = 'Bitcoin Volume and Market Capatalization for 2018-19',
+       subtitle = 'Scaled',caption = "Adi" ) +
+  theme(panel.background = element_rect(colour = 'orange',size = 2, 
+                                        linetype = "solid"))+
+  annotate("text", x=-1, y=3.7,size = 5, label= paste("Correlation =",
+        round(cor(Bitcoin1819$BitcoinVolume,Bitcoin1819$BitcoinMarket.Cap),2)))
+```
+
+The answers to the question above lies in the closing prices of the two currencies
+as shown in the below graphical representation. 
+
+One of the biggest contributing factor to such high confidence levels of trade 
+of Tether is the price volatility of Bitcoin. Notice from the below graph that 
+ within two years, Bitcoin's pricing has gone down from less than 4000 to almost 
+upwards of 18000. However, in case of Tether, the price difference has not been 
+more than a mere 6 cents.
+
+Another reason behind such high volume of trade for Tether is the base price of the 
+stock. The price of Tether is so low that people who are not avid investors and also
+low risk mutual fund companies who want to get into the digital currency market 
+can get in through Tether without too taking too much risk. This, however also 
+leads to very low reward when compared to Bitcoin as reward is always proportional
+to the risk factor
+
+However, this does lead to the question as to why Tether and not any other currency 
+with low price volatility and low base price competes with Bitcoin. 
+the answer to this question is that Tether is the only cryptocurrency which is 
+backed by US dollar. No other currency is backed by physical currency, which leads
+to further investor trust in the stock.
+
+
+
+
+```{r,echo = TRUE,message=F, warning=F,fig.width=10, fig.height=5}
+bitcoin_close = plot_ly(as.data.frame(Bitcoin1819),y = ~BitcoinClose, x = ~index(Bitcoin1819), 
+        type = 'scatter',mode = 'lines',name = 'Bitcoin Closing Price') %>%
+layout(xaxis = list(title = 'Years',tickangle = -45,tickfont = list(size = 20)),
+       yaxis = list(title = 'Price Range',tickfont = list(size = 20)))
+
+tether_close = plot_ly(as.data.frame(Tether1819),y = ~TetherClose, x = ~index(Tether1819), 
+        type = 'scatter',mode = 'lines',name = 'Tether Closing Price') %>%
+    layout(xaxis = list(title = 'Years',tickangle = 45,tickfont = list(size = 20)),
+           yaxis = list(title = 'Price Range',tickfont = list(size = 20)))
+
+subplot(bitcoin_close, tether_close) %>% layout(title="Closing Prices of Bitcoin and Tether",font = 20)
+```
+
+
+
+### 6. Central Limit Theorm
+
+The Central limit theorem application is shown by taking 5000 samples of sizes 10,
+40 and 100 of Bitcoin volume traded for the last two years. It can be clearly seen 
+that the distributions follows a normal curve with a mean of around 110 (scaled). 
+As the sample size increases, the standard deviation keeps decreasing resulting 
+in a more compact distribution.
+
+
+```{r, include = TRUE}
+xbar10 = c()
+
+for (i in 1:5000) {
+  xbar10[i] = mean(sample(x = Bitcoin1819$BitcoinVolume,size = 10,replace = TRUE))
+}
+xbar10 = as.numeric(unlist(xbar10))
+
+p1 = ggplot(mapping = aes(xbar10/100000000, fill = cut(xbar10,30))) + 
+  geom_histogram(show.legend = FALSE,color = 'black',,bins = 30,size = .001) + 
+  scale_fill_discrete(h = c(240,10)) + 
+  theme_minimal() +
+  labs(x = 'Sample Bitcoin Volume', y = 'Frequency',title = 'Sample Bitcoin Volume for 2018-19',
+       subtitle = 'in Hundred Millions/ Sample of 10') +
+  theme(axis.text.x = element_text(angle=65, vjust=0.6)) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5)) +
+  annotate("text", x=130, y=500, label= paste("Mean =",round(mean(xbar10/100000000),2))) +
+  annotate("text", x=130, y=520, label= paste("SD =",round(sd(xbar10/100000000),2)))
+
+xbar40 = c()
+
+for (i in 1:5000) {
+  xbar40[i] = mean(sample(x = Bitcoin1819$BitcoinVolume,size = 40,replace = TRUE))
+}
+xbar40 = as.numeric(unlist(xbar40))
+
+p2 = ggplot(mapping = aes(xbar40/100000000, fill = cut(xbar40,30))) + 
+  geom_histogram(show.legend = FALSE,color = 'black',,bins = 30,size = .001) + 
+  scale_fill_discrete(h = c(240,10)) + 
+  theme_minimal() +
+  labs(x = 'Sample Bitcoin Volume', y = 'Frequency',title = 'Sample Bitcoin Volume for 2018-19',
+       subtitle = 'in Hundred Millions/ Sample of 40' ) +
+  theme(axis.text.x = element_text(angle=65, vjust=0.6)) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5)) +
+  annotate("text", x=130, y=500, label= paste("Mean =",round(mean(xbar40/100000000),2))) +
+  annotate("text", x=130, y=520, label= paste("SD =",round(sd(xbar40/100000000),2)))
+
+xbar100 = c()
+
+for (i in 1:5000) {
+  xbar100[i] = mean(sample(x = Bitcoin1819$BitcoinVolume,size = 100,replace = TRUE))
+}
+xbar100 = as.numeric(unlist(xbar100))
+
+p3 = ggplot(mapping = aes(xbar100/100000000, fill = cut(xbar100,30))) + 
+  geom_histogram(show.legend = FALSE,color = 'black',,bins = 30,size = .001) + 
+  scale_fill_discrete(h = c(240,10)) + 
+  theme_minimal() +
+  labs(x = 'Sample Bitcoin Volume', y = 'Frequency',title = 'Sample Bitcoin Volume for 2018-19',
+       subtitle = 'in Hundred Millions/ Sample of 100' ) +
+  theme(axis.text.x = element_text(angle=65, vjust=0.6)) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5)) +
+  annotate("text", x=128, y=500, label= paste("Mean =",round(mean(xbar100/100000000),2))) +
+  annotate("text", x=130, y=520, label= paste("SD =",round(sd(xbar100/100000000),2)))
+```
+
+```{r,echo = TRUE,message=F, warning=F,fig.width=15, fig.height=8}
+grid.arrange(p1, p2, p3, nrow = 1)
+```
+
+### 7. Sampling Methods
+
+Random, Systematic, Stratified and Cluster sampling methods are used to analyze the sampling 
+means to the population mean of all currencies volume data. The below plot shows 
+relative difference between different sampling methods and its comparison to the 
+population mean. A sample of 50 values for each currency was taken to ensure 
+equal representation.
+
+
+
+```{r, include = TRUE}
+
+set.seed(100)
+
+Currency_list = c("Tezos","Binance_coin","Eos","Bitcoin","Tether","Xrp","Bitcoin_cash",
+                  "Stellar","Litecoin","Ethereum","Cardano","Bitcoin_sv")
+
+random_sampling_means = c()
+count = 1
+
+for (i in Currency_list){
+  random_sampling_means[count] = mean(get(i)[(srswor(50,nrow(get(i)[,5])))!=0,])
+  count = count + 1
+}
+
+sampling_DF = as.data.frame(random_sampling_means,Currency_list)
+
+# Systematic Sampling
+set.seed(100)
+
+N = nrow(Bitcoin)
+n = 50
+k = floor(N / n)
+r = sample(k, 1)
+s = seq(r, by = k, length = n)
+
+systematic_sampling_means = c()
+count = 1
+
+for (i in Currency_list){
+  systematic_sampling_means[count] = mean(get(i)[s,][,5])
+  count = count + 1
+}
+sampling_DF$systematic_sampling_means = systematic_sampling_means
+
+# Stratified Sampling
+
+# add year coloum to whole data to pick 'year'stratas from each currency
+
+freq = table(cd$Currency, cd$year)
+st.sizes =as.vector(t(round((595 * freq / sum(freq))))) # 595 so as to get 50 samples for each currency
+st.sizes = st.sizes[st.sizes != 0]
+
+st.3 = strata(cd,stratanames = c('Currency','year'),
+              size = st.sizes, method = 'srswor',
+              description = FALSE)
+
+stratified_sampling_means = getdata(cd, st.3)
+stratified_sampling_means = tapply(stratified_sampling_means$Volume, stratified_sampling_means$Currency, mean)
+stratified_sampling_means = as.data.frame(stratified_sampling_means)
+sampling_DF$stratified_sampling_means = stratified_sampling_means[c(11,1,6,2,10,12,3,9,8,7,5,4),]
+
+# Cluster
+
+cluster_sampling_means = c()
+
+cd$category = sample(LETTERS[1:12],nrow(cd),replace = TRUE)
+cluster_data = getdata(cd,(cluster(cd,c('category'),6,'srswor')))
+
+data_Tezos = cluster_data[cluster_data$Currency == 'Tezos',]
+sample_Tezos = srswor(50,nrow(data_Tezos))
+cluster_sampling_means[1] = mean(data_Tezos[sample_Tezos != 0,][,7])
+
+data_Binance_coin = cluster_data[cluster_data$Currency == 'Binance-coin',]
+sample_Binance_coin = srswor(50,nrow(data_Binance_coin))
+cluster_sampling_means[2] = mean(data_Binance_coin[sample_Binance_coin != 0,][,7])
+
+data_Eos = cluster_data[cluster_data$Currency == 'Eos',]
+sample_Eos = srswor(50,nrow(data_Eos))
+cluster_sampling_means[3] = mean(data_Eos[sample_Eos != 0,][,7])
+
+data_Bitcoin = cluster_data[cluster_data$Currency == 'Bitcoin',]
+sample_Bitcoin = srswor(50,nrow(data_Bitcoin))
+cluster_sampling_means[4] = mean(data_Bitcoin[sample_Bitcoin != 0,][,7])
+
+data_Tether = cluster_data[cluster_data$Currency == 'Tether',]
+sample_Tether = srswor(50,nrow(data_Tether))
+cluster_sampling_means[5] = mean(data_Tether[sample_Tether != 0,][,7])
+
+data_Xrp = cluster_data[cluster_data$Currency == 'Xrp',]
+sample_Xrp = srswor(50,nrow(data_Xrp))
+cluster_sampling_means[6] = mean(data_Xrp[sample_Xrp != 0,][,7])
+
+data_Bitcoin_cash = cluster_data[cluster_data$Currency == 'Bitcoin-cash',]
+sample_Bitcoin_cash  = srswor(50,nrow(data_Bitcoin_cash))
+cluster_sampling_means[7] = mean(data_Bitcoin_cash[sample_Bitcoin_cash != 0,][,7])
+
+data_Stellar = cluster_data[cluster_data$Currency == 'Stellar',]
+sample_Stellar = srswor(50,nrow(data_Stellar))
+cluster_sampling_means[8] = mean(data_Stellar[sample_Stellar != 0,][,7])
+
+data_Litecoin = cluster_data[cluster_data$Currency == 'Litecoin',]
+sample_Litecoin = srswor(50,nrow(data_Litecoin))
+cluster_sampling_means[9] = mean(data_Litecoin[sample_Litecoin != 0,][,7])
+
+data_Ethereum = cluster_data[cluster_data$Currency == 'Ethereum',]
+sample_Ethereum = srswor(50,nrow(data_Ethereum))
+cluster_sampling_means[10] = mean(data_Ethereum[sample_Ethereum != 0,][,7])
+
+data_Cardano = cluster_data[cluster_data$Currency == 'Cardano',]
+sample_Cardano = srswor(50,nrow(data_Cardano))
+cluster_sampling_means[11] = mean(data_Cardano[sample_Cardano != 0,][,7])
+
+data_Bitcoin_sv = cluster_data[cluster_data$Currency == 'Bitcoin-sv',]
+sample_Bitcoin_sv = srswor(50,nrow(data_Bitcoin_sv))
+cluster_sampling_means[12] = mean(data_Bitcoin_sv[sample_Bitcoin_sv != 0,][,7])
+
+sampling_DF$cluster_sampling_means = cluster_sampling_means
+
+# Population
+
+population_means = c()
+count = 1
+
+for (i in Currency_list){
+  population_means[count] = mean(get(i)[,5])
+  count = count + 1
+}
+
+sampling_DF$population_means = population_means
+```
+
+```{r,echo = TRUE, message=F, warning=F,fig.width=10, fig.height=5}
+plot_ly(sampling_DF, x = Currency_list, y = ~random_sampling_means, type = 'bar', 
+        name = 'Random Sampling Means',texttemplate = '%{y:.2s}', textposition = 'outside') %>% 
+   add_trace(y = ~systematic_sampling_means, name = 'Systematic Means') %>%
+   add_trace(y = ~stratified_sampling_means, name = 'Stratified Means') %>%
+   add_trace(y = ~cluster_sampling_means, name = 'Cluster Means') %>%
+   add_trace(y = ~population_means, name = 'Population Means') %>%
+   layout(title = 'Means of Volume by Sampling Methods',xaxis = list(tickangle = 45,
+                                                    tickfont = list(size = 20)),
+         yaxis = list(title = 'Volume Means',tickfont = list(size = 20)))
+
+```
+
+```{r, include = TRUE}
+sampling_DF$percentage_error_rs = round((abs(sampling_DF$population_means - 
+         sampling_DF$random_sampling_means) / sampling_DF$random_sampling_means),4) * 100
+
+sampling_DF$percentage_error_systematic = round((abs(sampling_DF$population_means - 
+          sampling_DF$systematic_sampling_means) / sampling_DF$systematic_sampling_means),4) * 100
+
+sampling_DF$percentage_error_stratified = round((abs(sampling_DF$population_means - 
+          sampling_DF$stratified_sampling_means) / sampling_DF$stratified_sampling_means),4) * 100
+
+sampling_DF$percentage_error_cluster = round((abs(sampling_DF$population_means - 
+          sampling_DF$cluster_sampling_means) / sampling_DF$cluster_sampling_means),4) * 100
+
+```
+
+
+##### Random Sampling - 
+
+A sample of 50 is selected out of all rows for each currency (50 rows out of 2412 for each 
+currency) the data is randomly selected irrespective of the years and since the data
+is very heavily left skewed, the random sampling method produce the least reliable
+results.
+
+##### Systematic Sampling - 
+
+50 rows of data for each currency is again selected without taking into account 
+the years factor. however, the systematic sampling results seem much better than random sampling
+as systematic sampling is sequence based which means the lower end and the higher 
+end of data has equal representation. Hence, the years from 2013 to mid of 
+2017 with very less activity are balanced by the later years of high activity.
+
+##### Stratified Sampling - 
+
+The years factor is taken into consideration in stratified sampling. The results 
+seem on par with systematic sampling and much closer to the population means. The 
+Stratified means seem to be lower than population means for almost currencies
+except Tether.
+
+##### Cluster Sampling - 
+
+The data was first divided into random clusters, as there were no natural divisions
+in the dataset. Two-stage cluster sampling method was used.
+Six random clusters were selected from twelve manually created clusters and from those six,
+50 rows of data for each currency was selected to arrive at the Cluster means for 
+the currencies. The results seem to be quite close to the population means.
+
+
+```{r,echo = TRUE, message=F, warning=F,fig.width=10, fig.height=5}
+plot_ly(sampling_DF, x = Currency_list, y = ~percentage_error_rs, type = 'bar', 
+        name = 'Random Sampling Error %') %>% 
+  add_trace(y = ~percentage_error_systematic, name = 'Systematic Means Error %') %>%
+  add_trace(y = ~percentage_error_stratified, name = 'Stratified Means Error %') %>%
+  add_trace(y = ~percentage_error_cluster, name = 'Cluster Means Error %') %>%
+  layout(title = 'Error % of Sampling Methods',xaxis = list(tickangle = 45,tickfont = list(size = 20)),
+         yaxis = list(title = 'Percentage',tickfont = list(size = 20)))
+
+```
+
+In conclusion it is interesting to see that that the random sampling method on an 
+average seems to be the most inaccurate method of sampling for this dataset. Upon 
+investigation it can be concluded that because the data if of all years and that 
+there was hardly any activity in the digital currency financial markets before mid 
+of 2017, could be the reason for such high inaccuracy compared to other methods.
+
+
+
+
