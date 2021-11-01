@@ -18,6 +18,7 @@ summary(cd)
 
 # summary function revels that all features are saved as of character type. 
 # converting each feature to its appropriate format.
+# comment
 # removing comma's and then converting to numeric as otherwise numeric introduces 
 # NA's.
 # Add new feature year
